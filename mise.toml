@@ -1,0 +1,95 @@
+[tools."http:arduino-cli-x64"]
+version = "1.5.1"
+url = "https://github.com/arduino/arduino-cli/releases/download/v{{ version }}/arduino-cli_{{ version }}_macOS_64bit.tar.gz"
+checksum_url = "https://github.com/arduino/arduino-cli/releases/download/v{{ version }}/{{ version }}-checksums.txt"
+os = ["macos/arm64"]
+
+[settings]
+lockfile_platforms = ["macos-arm64"]
+
+[env]
+ARDUINO_DIRECTORIES_DATA = "{{ config_root }}/.arduino/data"
+ARDUINO_DIRECTORIES_DOWNLOADS = "{{ config_root }}/.arduino/downloads"
+ARDUINO_DIRECTORIES_USER = "{{ config_root }}/.arduino/user"
+ARDUINO_UPDATER_ENABLE_NOTIFICATION = "false"
+
+[tasks.doctor]
+description = "ホストとArduino CLIの実行環境を確認する"
+run = """
+test "$(uname -m)" = "arm64"
+test "$(arch -x86_64 uname -m)" = "x86_64"
+file "$(command -v arduino-cli)"
+arduino-cli version
+arduino-cli config dump
+"""
+
+[tasks."arduino:update-index"]
+description = "UIAPduinoを含むボードインデックスを更新する"
+run = """
+arduino-cli core update-index \
+  --additional-urls https://github.com/YuukiUmeta-UIAP/board_manager_files/raw/main/package_uiap.jp_index.json
+"""
+
+[tasks."arduino:install-core"]
+description = "UIAPduinoのArduinoコアとx86_64ホストツールを導入する"
+depends = ["arduino:update-index"]
+run = """
+arduino-cli core install UIAP:ch32v \
+  --additional-urls https://github.com/YuukiUmeta-UIAP/board_manager_files/raw/main/package_uiap.jp_index.json
+"""
+
+[tasks."arduino:list-boards"]
+description = "利用可能なUIAPduinoボードを表示する"
+run = "arduino-cli board listall UIAP"
+
+[tasks."arduino:compile-blink"]
+description = "UIAPduino Pro Micro CH32V003 V1.4向けにBlinkをコンパイルする"
+run = """
+arduino-cli compile \
+  --fqbn UIAP:ch32v:CH32V00x_EVT:pnum=CH32V003V1DOT4 \
+  --build-path .build/blink \
+  sketches/blink
+"""
+
+[tasks."minichlink:build"]
+description = "UIAP公式forkからarm64 macOS版minichlinkをビルドする"
+run = """
+set -eu
+source_dir=".cache/ch32fun"
+revision="3bfa603f11d493710f2a811b5a2dfad905d9425c"
+
+if [ ! -d "$source_dir/.git" ]; then
+  git clone --filter=blob:none --no-checkout \
+    https://github.com/YuukiUmeta-UIAP/ch32fun.git \
+    "$source_dir"
+fi
+
+git -C "$source_dir" fetch --depth 1 origin "$revision"
+git -C "$source_dir" switch --detach "$revision"
+make -C "$source_dir/minichlink" minichlink \
+  INCS="-I/opt/homebrew/opt/libusb/include -L/opt/homebrew/opt/libusb/lib"
+
+mkdir -p .build/tools
+cp "$source_dir/minichlink/minichlink" .build/tools/minichlink
+file .build/tools/minichlink
+otool -L .build/tools/minichlink
+"""
+
+[tasks."minichlink:install"]
+description = "arm64版minichlinkを隔離済みArduinoツール領域へ配置する"
+depends = ["arduino:install-core", "minichlink:build"]
+run = """
+install -m 755 \
+  .build/tools/minichlink \
+  .arduino/data/packages/UIAP/tools/minichlink-2982dfd/1.0.0/minichlink
+sh scripts/patch-platform.sh
+file .arduino/data/packages/UIAP/tools/minichlink-2982dfd/1.0.0/minichlink
+"""
+
+[tasks."minichlink:probe"]
+description = "UIAPduino V1.4のHIDブートローダーを検出する"
+run = """
+.arduino/data/packages/UIAP/tools/minichlink-2982dfd/1.0.0/minichlink \
+  -c 0x1209b803 \
+  -a
+"""
