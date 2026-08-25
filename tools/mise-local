@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+
+set -eu
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+export MISE_CONFIG_DIR="${repo_root}/.mise/config"
+export MISE_DATA_DIR="${repo_root}/.mise/data"
+export MISE_CACHE_DIR="${repo_root}/.mise/cache"
+export MISE_STATE_DIR="${repo_root}/.mise/state"
+export MISE_TRUSTED_CONFIG_PATHS="${repo_root}"
+export MISE_CEILING_PATHS="$(dirname "${repo_root}")"
+
+exec mise "$@"

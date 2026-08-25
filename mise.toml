@@ -4,6 +4,10 @@ url = "https://github.com/arduino/arduino-cli/releases/download/v{{ version }}/a
 checksum_url = "https://github.com/arduino/arduino-cli/releases/download/v{{ version }}/{{ version }}-checksums.txt"
 os = ["macos/arm64"]
 
+[tools]
+"conda:libusb" = "1.0.29"
+"conda:pkg-config" = "0.29.2"
+
 [settings]
 lockfile_platforms = ["macos-arm64"]
 
@@ -21,6 +25,9 @@ test "$(arch -x86_64 uname -m)" = "x86_64"
 file "$(command -v arduino-cli)"
 arduino-cli version
 arduino-cli config dump
+libusb_prefix="$(mise where conda:libusb)"
+file "${libusb_prefix}/lib/libusb-1.0.dylib"
+PKG_CONFIG_PATH="${libusb_prefix}/lib/pkgconfig" pkg-config --modversion libusb-1.0
 """
 
 [tasks."arduino:update-index"]
@@ -66,8 +73,10 @@ fi
 
 git -C "$source_dir" fetch --depth 1 origin "$revision"
 git -C "$source_dir" switch --detach "$revision"
-make -C "$source_dir/minichlink" minichlink \
-  INCS="-I/opt/homebrew/opt/libusb/include -L/opt/homebrew/opt/libusb/lib"
+libusb_prefix="$(mise where conda:libusb)"
+export PKG_CONFIG_PATH="${libusb_prefix}/lib/pkgconfig"
+make -B -C "$source_dir/minichlink" minichlink \
+  INCS="-I${libusb_prefix}/include -L${libusb_prefix}/lib -Wl,-rpath,${libusb_prefix}/lib"
 
 mkdir -p .build/tools
 cp "$source_dir/minichlink/minichlink" .build/tools/minichlink
