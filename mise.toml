@@ -4,9 +4,11 @@ url = "https://github.com/arduino/arduino-cli/releases/download/v{{ version }}/a
 checksum_url = "https://github.com/arduino/arduino-cli/releases/download/v{{ version }}/{{ version }}-checksums.txt"
 os = ["macos/arm64"]
 
-[tools]
-"conda:libusb" = "1.0.29"
-"conda:pkg-config" = "0.29.2"
+[tools."http:uiapflash"]
+version = "1.0.0"
+url = "https://github.com/tarosay/uiapflash/releases/download/v{{ version }}/uiapflash-{{ version }}-macos.tar.gz"
+checksum = "sha256:185e9c3ea69eba278c4c4b88b4cc5304be986a4edaf0548041fdb39ddf740d01"
+os = ["macos"]
 
 [settings]
 lockfile_platforms = ["macos-arm64"]
@@ -25,9 +27,8 @@ test "$(arch -x86_64 uname -m)" = "x86_64"
 file "$(command -v arduino-cli)"
 arduino-cli version
 arduino-cli config dump
-libusb_prefix="$(mise where conda:libusb)"
-file "${libusb_prefix}/lib/libusb-1.0.dylib"
-PKG_CONFIG_PATH="${libusb_prefix}/lib/pkgconfig" pkg-config --modversion libusb-1.0
+file "$(command -v uiapflash)"
+uiapflash --help
 """
 
 [tasks."arduino:update-index"]
@@ -58,47 +59,11 @@ arduino-cli compile \
   sketches/blink
 """
 
-[tasks."minichlink:build"]
-description = "UIAP公式forkからarm64 macOS版minichlinkをビルドする"
-run = """
-set -eu
-source_dir=".cache/ch32fun"
-revision="3bfa603f11d493710f2a811b5a2dfad905d9425c"
+[tasks."uiapflash:probe"]
+description = "書き込みモードのUIAPduinoを検出する"
+run = "uiapflash --list"
 
-if [ ! -d "$source_dir/.git" ]; then
-  git clone --filter=blob:none --no-checkout \
-    https://github.com/YuukiUmeta-UIAP/ch32fun.git \
-    "$source_dir"
-fi
-
-git -C "$source_dir" fetch --depth 1 origin "$revision"
-git -C "$source_dir" switch --detach "$revision"
-libusb_prefix="$(mise where conda:libusb)"
-export PKG_CONFIG_PATH="${libusb_prefix}/lib/pkgconfig"
-make -B -C "$source_dir/minichlink" minichlink \
-  INCS="-I${libusb_prefix}/include -L${libusb_prefix}/lib -Wl,-rpath,${libusb_prefix}/lib"
-
-mkdir -p .build/tools
-cp "$source_dir/minichlink/minichlink" .build/tools/minichlink
-file .build/tools/minichlink
-otool -L .build/tools/minichlink
-"""
-
-[tasks."minichlink:install"]
-description = "arm64版minichlinkを隔離済みArduinoツール領域へ配置する"
-depends = ["arduino:install-core", "minichlink:build"]
-run = """
-install -m 755 \
-  .build/tools/minichlink \
-  .arduino/data/packages/UIAP/tools/minichlink-2982dfd/1.0.0/minichlink
-sh scripts/patch-platform.sh
-file .arduino/data/packages/UIAP/tools/minichlink-2982dfd/1.0.0/minichlink
-"""
-
-[tasks."minichlink:probe"]
-description = "UIAPduino V1.4のHIDブートローダーを検出する"
-run = """
-.arduino/data/packages/UIAP/tools/minichlink-2982dfd/1.0.0/minichlink \
-  -c 0x1209b803 \
-  -a
-"""
+[tasks."arduino:upload-blink"]
+description = "BlinkをコンパイルしてUIAPduinoへ書き込む"
+depends = ["arduino:compile-blink"]
+run = "uiapflash --flash-size 16384 .build/blink/blink.ino.bin"

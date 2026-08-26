@@ -2,36 +2,6 @@
 
 lockfile_version = 1
 
-[conda-packages.macos-arm64."libiconv-1.18-he4c29f2_3"]
-url = "https://conda.anaconda.org/conda-forge/osx-arm64/libiconv-1.18-he4c29f2_3.conda"
-checksum = "sha256:689a14968267f2f97c07112fca5636e7d756036b9aee969911267c20bd3eea1f"
-
-[[tools."conda:libusb"]]
-version = "1.0.29"
-backend = "conda:libusb"
-specifiers = ["1.0.29"]
-
-[tools."conda:libusb".options]
-channel = "conda-forge"
-
-[tools."conda:libusb"."platforms.macos-arm64"]
-checksum = "sha256:5eee9a2bf359e474d4548874bcfc8d29ebad0d9ba015314439c256904e40aaad"
-url = "https://conda.anaconda.org/conda-forge/osx-arm64/libusb-1.0.29-hbc156a2_0.conda"
-conda_deps = []
-
-[[tools."conda:pkg-config"]]
-version = "0.29.2"
-backend = "conda:pkg-config"
-specifiers = ["0.29.2"]
-
-[tools."conda:pkg-config".options]
-channel = "conda-forge"
-
-[tools."conda:pkg-config"."platforms.macos-arm64"]
-checksum = "sha256:92c51e21a2c37382df8e15d817692b3e4cf8b810ba14de2d4adc42be58e8d50b"
-url = "https://conda.anaconda.org/conda-forge/osx-arm64/pkg-config-0.29.2-hdc6e874_1011.conda"
-conda_deps = ["libiconv-1.18-he4c29f2_3"]
-
 [[tools."http:arduino-cli-x64"]]
 version = "1.5.1"
 backend = "http:arduino-cli-x64"
@@ -40,3 +10,12 @@ specifiers = ["1.5.1"]
 [tools."http:arduino-cli-x64"."platforms.macos-arm64"]
 checksum = "sha256:c982e940027996bea9901050e95fae99c59c1dcfee54beedecaf28141e7bf2e7"
 url = "https://github.com/arduino/arduino-cli/releases/download/v1.5.1/arduino-cli_1.5.1_macOS_64bit.tar.gz"
+
+[[tools."http:uiapflash"]]
+version = "1.0.0"
+backend = "http:uiapflash"
+specifiers = ["1.0.0"]
+
+[tools."http:uiapflash"."platforms.macos-arm64"]
+checksum = "sha256:185e9c3ea69eba278c4c4b88b4cc5304be986a4edaf0548041fdb39ddf740d01"
+url = "https://github.com/tarosay/uiapflash/releases/download/v1.0.0/uiapflash-1.0.0-macos.tar.gz"
