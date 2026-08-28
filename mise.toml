@@ -1,82 +1,61 @@
-[tools."http:arduino-cli-x64"]
-version = "1.5.1"
-url = "https://github.com/arduino/arduino-cli/releases/download/v{{ version }}/arduino-cli_{{ version }}_macOS_64bit.tar.gz"
-checksum_url = "https://github.com/arduino/arduino-cli/releases/download/v{{ version }}/{{ version }}-checksums.txt"
+[tools."http:xpack-riscv-none-elf-gcc"]
+version = "13.2.0-2"
+url = "https://github.com/xpack-dev-tools/riscv-none-elf-gcc-xpack/releases/download/v{{ version }}/xpack-riscv-none-elf-gcc-{{ version }}-darwin-arm64.tar.gz"
+checksum = "sha256:dfe3123e5e5093b165eaaf18401b802cbb8697f5ec9b0f5cfd99c45e848fd8a7"
 os = ["macos/arm64"]
 
 [tools]
 "conda:libusb" = "1.0.29"
-"conda:pkg-config" = "0.29.2"
 
 [settings]
 lockfile_platforms = ["macos-arm64"]
 
-[env]
-ARDUINO_DIRECTORIES_DATA = "{{ config_root }}/.arduino/data"
-ARDUINO_DIRECTORIES_DOWNLOADS = "{{ config_root }}/.arduino/downloads"
-ARDUINO_DIRECTORIES_USER = "{{ config_root }}/.arduino/user"
-ARDUINO_UPDATER_ENABLE_NOTIFICATION = "false"
-
 [tasks.doctor]
-description = "ホストとArduino CLIの実行環境を確認する"
+description = "ホストとV006開発ツールの実行環境を確認する"
 run = """
 test "$(uname -m)" = "arm64"
-test "$(arch -x86_64 uname -m)" = "x86_64"
-file "$(command -v arduino-cli)"
-arduino-cli version
-arduino-cli config dump
+toolchain_dir="$(mise where http:xpack-riscv-none-elf-gcc)"
+file "${toolchain_dir}/bin/riscv-none-elf-gcc"
+"${toolchain_dir}/bin/riscv-none-elf-gcc" --version
 libusb_prefix="$(mise where conda:libusb)"
 file "${libusb_prefix}/lib/libusb-1.0.dylib"
-PKG_CONFIG_PATH="${libusb_prefix}/lib/pkgconfig" pkg-config --modversion libusb-1.0
+otool -L "${libusb_prefix}/lib/libusb-1.0.dylib"
 """
 
-[tasks."arduino:update-index"]
-description = "UIAPduinoを含むボードインデックスを更新する"
-run = """
-arduino-cli core update-index \
-  --additional-urls https://github.com/YuukiUmeta-UIAP/board_manager_files/raw/main/package_uiap.jp_index.json
-"""
-
-[tasks."arduino:install-core"]
-description = "UIAPduinoのArduinoコアとx86_64ホストツールを導入する"
-depends = ["arduino:update-index"]
-run = """
-arduino-cli core install UIAP:ch32v \
-  --additional-urls https://github.com/YuukiUmeta-UIAP/board_manager_files/raw/main/package_uiap.jp_index.json
-"""
-
-[tasks."arduino:list-boards"]
-description = "利用可能なUIAPduinoボードを表示する"
-run = "arduino-cli board listall UIAP"
-
-[tasks."arduino:compile-blink"]
-description = "UIAPduino Pro Micro CH32V003 V1.4向けにBlinkをコンパイルする"
-run = """
-arduino-cli compile \
-  --fqbn UIAP:ch32v:CH32V00x_EVT:pnum=CH32V003V1DOT4 \
-  --build-path .build/blink \
-  sketches/blink
-"""
-
-[tasks."minichlink:build"]
-description = "UIAP公式forkからarm64 macOS版minichlinkをビルドする"
+[tasks."ch32fun:checkout"]
+description = "公式ch32funを固定リビジョンで取得する"
 run = """
 set -eu
 source_dir=".cache/ch32fun"
-revision="3bfa603f11d493710f2a811b5a2dfad905d9425c"
+repository="https://github.com/cnlohr/ch32fun.git"
+revision="6c4dd539a422aaea0ba6ce45630eed1b49728579"
 
 if [ ! -d "$source_dir/.git" ]; then
   git clone --filter=blob:none --no-checkout \
-    https://github.com/YuukiUmeta-UIAP/ch32fun.git \
+    "$repository" \
     "$source_dir"
+fi
+
+git -C "$source_dir" remote set-url origin "$repository"
+if [ "$(git -C "$source_dir" rev-parse HEAD)" = "$revision" ]; then
+  exit 0
 fi
 
 git -C "$source_dir" fetch --depth 1 origin "$revision"
 git -C "$source_dir" switch --detach "$revision"
+"""
+
+[tasks."minichlink:build"]
+description = "arm64 macOS版minichlinkをビルドする"
+depends = ["ch32fun:checkout"]
+run = """
+set -eu
+source_dir=".cache/ch32fun"
 libusb_prefix="$(mise where conda:libusb)"
-export PKG_CONFIG_PATH="${libusb_prefix}/lib/pkgconfig"
-make -B -C "$source_dir/minichlink" minichlink \
-  INCS="-I${libusb_prefix}/include -L${libusb_prefix}/lib -Wl,-rpath,${libusb_prefix}/lib"
+make -C "$source_dir/minichlink" minichlink \
+  SHASUM="/usr/bin/shasum" \
+  LIBUSB_INCS="-I${libusb_prefix}/include/libusb-1.0" \
+  LIBUSB_LIBS="-L${libusb_prefix}/lib -lusb-1.0 -Wl,-rpath,${libusb_prefix}/lib"
 
 mkdir -p .build/tools
 cp "$source_dir/minichlink/minichlink" .build/tools/minichlink
@@ -84,31 +63,42 @@ file .build/tools/minichlink
 otool -L .build/tools/minichlink
 """
 
-[tasks."minichlink:install"]
-description = "arm64版minichlinkを隔離済みArduinoツール領域へ配置する"
-depends = ["arduino:install-core", "minichlink:build"]
+[tasks."ch32v006:compile-blink"]
+description = "UIAPduino Pro Micro CH32V006 V1.1向けにBlinkをコンパイルする"
+depends = ["ch32fun:checkout"]
 run = """
-install -m 755 \
-  .build/tools/minichlink \
-  .arduino/data/packages/UIAP/tools/minichlink-2982dfd/1.0.0/minichlink
-sh scripts/patch-platform.sh
-file .arduino/data/packages/UIAP/tools/minichlink-2982dfd/1.0.0/minichlink
+set -eu
+firmware_dir="firmware/ch32v006/blink"
+ch32fun_dir="$PWD/.cache/ch32fun/ch32fun"
+toolchain_dir="$(mise where http:xpack-riscv-none-elf-gcc)"
+compiler_prefix="${toolchain_dir}/bin/riscv-none-elf"
+
+make -C "$firmware_dir" clean CH32FUN="$ch32fun_dir" PREFIX="$compiler_prefix"
+make -C "$firmware_dir" build CH32FUN="$ch32fun_dir" PREFIX="$compiler_prefix"
+mkdir -p .build/ch32v006/blink
+cp "$firmware_dir/blink.bin" .build/ch32v006/blink/blink.bin
+cp "$firmware_dir/blink.elf" .build/ch32v006/blink/blink.elf
+make -C "$firmware_dir" clean CH32FUN="$ch32fun_dir" PREFIX="$compiler_prefix"
 """
 
-[tasks."minichlink:probe"]
-description = "UIAPduino V1.4のHIDブートローダーを検出する"
+[tasks."ch32v006:probe"]
+description = "UIAPduino Pro Micro CH32V006 V1.1のオンボードデバッガを検出する"
+depends = ["minichlink:build"]
 run = """
-.arduino/data/packages/UIAP/tools/minichlink-2982dfd/1.0.0/minichlink \
-  -c 0x1209b803 \
-  -a
+.build/tools/minichlink \
+  -c 0x1209b806 \
+  -C funprog \
+  -i
 """
 
-[tasks."minichlink:flash-blink"]
-description = "UIAPduino V1.4へBlinkを書き込む"
-depends = ["minichlink:install", "arduino:compile-blink"]
+[tasks."ch32v006:flash-blink"]
+description = "UIAPduino Pro Micro CH32V006 V1.1へBlinkを書き込む"
+depends = ["minichlink:build", "ch32v006:compile-blink"]
 run = """
-.arduino/data/packages/UIAP/tools/minichlink-2982dfd/1.0.0/minichlink \
-  -c 0x1209b803 \
-  -w .build/blink/blink.ino.bin \
-  flash
+.build/tools/minichlink \
+  -c 0x1209b806 \
+  -C funprog \
+  -w .build/ch32v006/blink/blink.bin \
+  flash \
+  -b
 """
