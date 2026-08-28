@@ -37,7 +37,8 @@ if [ ! -d "$source_dir/.git" ]; then
 fi
 
 git -C "$source_dir" remote set-url origin "$repository"
-if [ "$(git -C "$source_dir" rev-parse HEAD)" = "$revision" ]; then
+if [ -f "$source_dir/ch32fun/ch32fun.mk" ] && \
+   [ "$(git -C "$source_dir" rev-parse HEAD)" = "$revision" ]; then
   exit 0
 fi
 
@@ -52,15 +53,26 @@ run = """
 set -eu
 source_dir=".cache/ch32fun"
 libusb_prefix="$(mise where conda:libusb)"
-make -C "$source_dir/minichlink" minichlink \
+build_dir=".build/tools"
+build_key="$(git -C "$source_dir" rev-parse HEAD):${libusb_prefix}"
+build_key_file="${build_dir}/minichlink.build-key"
+
+if [ -x "${build_dir}/minichlink" ] && \
+   [ -f "$build_key_file" ] && \
+   [ "$(sed -n '1p' "$build_key_file")" = "$build_key" ]; then
+  exit 0
+fi
+
+make -B -C "$source_dir/minichlink" minichlink \
   SHASUM="/usr/bin/shasum" \
   LIBUSB_INCS="-I${libusb_prefix}/include/libusb-1.0" \
   LIBUSB_LIBS="-L${libusb_prefix}/lib -lusb-1.0 -Wl,-rpath,${libusb_prefix}/lib"
 
-mkdir -p .build/tools
-cp "$source_dir/minichlink/minichlink" .build/tools/minichlink
-file .build/tools/minichlink
-otool -L .build/tools/minichlink
+mkdir -p "$build_dir"
+cp "$source_dir/minichlink/minichlink" "${build_dir}/minichlink"
+file "${build_dir}/minichlink"
+otool -L "${build_dir}/minichlink"
+printf '%s\n' "$build_key" > "$build_key_file"
 """
 
 [tasks."ch32v006:compile-blink"]
