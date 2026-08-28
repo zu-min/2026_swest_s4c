@@ -45,3 +45,9 @@ miseのcondaバックエンドで導入した`libusb`を使い、UIAP公式fork�
 ```
 
 成功時は`Detected CH32V003`などの情報が表示されます。
+
+Blinkを書き込む場合は、実機をブートローダーモードで接続して次を実行します。必要なコンパイルとarm64版`minichlink`の導入も依存タスクとして実行されます。
+
+```shell
+./tools/mise-local run minichlink:flash-blink
+```

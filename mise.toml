@@ -102,3 +102,13 @@ run = """
   -c 0x1209b803 \
   -a
 """
+
+[tasks."minichlink:flash-blink"]
+description = "UIAPduino V1.4へBlinkを書き込む"
+depends = ["minichlink:install", "arduino:compile-blink"]
+run = """
+.arduino/data/packages/UIAP/tools/minichlink-2982dfd/1.0.0/minichlink \
+  -c 0x1209b803 \
+  -w .build/blink/blink.ino.bin \
+  flash
+"""
